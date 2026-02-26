@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+# .env is loaded by docker-compose env_file, not COPY'd
+*.db
+.git/
+.ruff_cache/
+.pytest_cache/
+bot_avatar*
+scripts/
+tests/

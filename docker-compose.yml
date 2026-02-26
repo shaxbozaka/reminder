@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: reminder-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: reminder
+      POSTGRES_USER: reminder
+      POSTGRES_PASSWORD: reminder_s3cure_pwd
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reminder"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  bot:
+    build: .
+    container_name: salah-reminder
+    restart: always
+    ports:
+      - "8443:8443"
+      - "8090:8090"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - SALAH_DATABASE_URL=postgresql+asyncpg://reminder:reminder_s3cure_pwd@db:5432/reminder
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

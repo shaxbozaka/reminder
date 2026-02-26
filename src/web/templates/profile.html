@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salah Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* ------------------------------------------------------------------ */
+/*  CSS Reset & Variables                                              */
+/* ------------------------------------------------------------------ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary:    #0f1923;
+  --bg-card:       #1a2634;
+  --bg-card-alt:   #1e2d3d;
+  --border:        #263545;
+  --text-primary:  #eceff1;
+  --text-secondary:#90a4ae;
+  --text-muted:    #607d8b;
+  --accent:        #4fc3f7;
+  --green:         #66bb6a;
+  --green-light:   #81c784;
+  --yellow:        #fdd835;
+  --orange:        #ffa726;
+  --red:           #ef5350;
+  --gray:          #546e7a;
+  --purple:        #ab47bc;
+  --radius:        14px;
+  --shadow:        0 4px 24px rgba(0,0,0,.35);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Loading / Error States                                             */
+/* ------------------------------------------------------------------ */
+#loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: 1.5rem;
+}
+
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#loading p { color: var(--text-secondary); font-size: .95rem; }
+
+#error-state {
+  display: none;
+  text-align: center;
+  padding: 4rem 1.5rem;
+}
+#error-state h2 { color: var(--red); margin-bottom: .5rem; }
+
+#dashboard { display: none; }
+
+/* ------------------------------------------------------------------ */
+/*  Layout                                                             */
+/* ------------------------------------------------------------------ */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Header                                                             */
+/* ------------------------------------------------------------------ */
+.header {
+  text-align: center;
+  padding: 2rem 1rem 1.5rem;
+  animation: fadeInDown .5s ease-out;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.header-label {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: .25rem;
+}
+
+.header h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 1.25rem;
+}
+
+.header-stats {
+  display: flex;
+  justify-content: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.header-stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .65rem 1.1rem;
+  min-width: 100px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.header-stat .value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--accent);
+  display: block;
+  line-height: 1.2;
+}
+
+.header-stat .label {
+  font-size: .7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cards                                                              */
+/* ------------------------------------------------------------------ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+  animation: fadeInUp .45s ease-out both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card:nth-child(1) { animation-delay: .05s; }
+.card:nth-child(2) { animation-delay: .10s; }
+.card:nth-child(3) { animation-delay: .15s; }
+.card:nth-child(4) { animation-delay: .20s; }
+.card:nth-child(5) { animation-delay: .25s; }
+.card:nth-child(6) { animation-delay: .30s; }
+.card:nth-child(7) { animation-delay: .35s; }
+
+.card-title {
+  font-size: .85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.card-title .icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .9rem;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Stats Grid                                                         */
+/* ------------------------------------------------------------------ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+  margin-bottom: 1rem;
+  animation: fadeInUp .45s ease-out both;
+  animation-delay: .07s;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem .75rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.stat-card.green::before  { background: var(--green); }
+.stat-card.accent::before { background: var(--accent); }
+.stat-card.purple::before { background: var(--purple); }
+
+.stat-card .big-number {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: .15rem;
+}
+
+.stat-card.green  .big-number { color: var(--green); }
+.stat-card.accent .big-number { color: var(--accent); }
+.stat-card.purple .big-number { color: var(--purple); }
+
+.stat-card .stat-label {
+  font-size: .65rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Charts                                                             */
+/* ------------------------------------------------------------------ */
+.chart-container {
+  position: relative;
+  width: 100%;
+}
+
+.chart-container.line-chart  { height: 220px; }
+.chart-container.bar-chart   { height: 220px; }
+.chart-container.doughnut-chart { height: 260px; max-width: 320px; margin: 0 auto; }
+.chart-container.stacked-chart { height: 260px; }
+
+canvas { max-width: 100%; }
+
+/* ------------------------------------------------------------------ */
+/*  Insights                                                           */
+/* ------------------------------------------------------------------ */
+.insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .75rem .85rem;
+  background: var(--bg-card-alt);
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.insight-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 12px rgba(0,0,0,.2);
+}
+
+.insight-icon {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: .95rem;
+  background: rgba(79,195,247,.12);
+  color: var(--accent);
+}
+
+.insight-icon.warning  { background: rgba(255,167,38,.12); color: var(--orange); }
+.insight-icon.star     { background: rgba(253,216,53,.12); color: var(--yellow); }
+.insight-icon.fire     { background: rgba(239,83,80,.12);  color: var(--red); }
+.insight-icon.mosque   { background: rgba(102,187,106,.12); color: var(--green); }
+.insight-icon.chart    { background: rgba(171,71,188,.12); color: var(--purple); }
+.insight-icon.clock    { background: rgba(255,167,38,.12); color: var(--orange); }
+.insight-icon.trending_up   { background: rgba(102,187,106,.12); color: var(--green); }
+.insight-icon.trending_down { background: rgba(239,83,80,.12); color: var(--red); }
+.insight-icon.refresh  { background: rgba(79,195,247,.12); color: var(--accent); }
+.insight-icon.check    { background: rgba(102,187,106,.12); color: var(--green); }
+.insight-icon.info     { background: rgba(79,195,247,.12); color: var(--accent); }
+
+.insight-text {
+  font-size: .88rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.insight-item.warning { border-left-color: var(--orange); }
+.insight-item.star    { border-left-color: var(--yellow); }
+.insight-item.fire    { border-left-color: var(--red); }
+.insight-item.mosque  { border-left-color: var(--green); }
+.insight-item.chart   { border-left-color: var(--purple); }
+.insight-item.clock   { border-left-color: var(--orange); }
+.insight-item.trending_up   { border-left-color: var(--green); }
+.insight-item.trending_down { border-left-color: var(--red); }
+.insight-item.refresh  { border-left-color: var(--accent); }
+.insight-item.check    { border-left-color: var(--green); }
+.insight-item.info     { border-left-color: var(--accent); }
+
+/* ------------------------------------------------------------------ */
+/*  Best / Worst badges                                                */
+/* ------------------------------------------------------------------ */
+.badge-row {
+  display: flex;
+  gap: .75rem;
+  margin-bottom: 1rem;
+  animation: fadeInUp .45s ease-out both;
+  animation-delay: .12s;
+}
+
+.badge {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .85rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.badge .badge-label {
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: .2rem;
+}
+
+.badge .badge-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.badge.best  .badge-value { color: var(--green); }
+.badge.worst .badge-value { color: var(--orange); }
+
+/* ------------------------------------------------------------------ */
+/*  Footer                                                             */
+/* ------------------------------------------------------------------ */
+.footer {
+  text-align: center;
+  padding: 1.5rem 0 .5rem;
+  font-size: .72rem;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Responsive                                                         */
+/* ------------------------------------------------------------------ */
+@media (max-width: 480px) {
+  .container { padding: 1rem .75rem 2.5rem; }
+  .header h1 { font-size: 1.4rem; }
+  .header-stat { min-width: 85px; padding: .5rem .75rem; }
+  .header-stat .value { font-size: 1.15rem; }
+  .stats-grid { gap: .5rem; }
+  .stat-card .big-number { font-size: 1.5rem; }
+  .chart-container.line-chart,
+  .chart-container.bar-chart { height: 190px; }
+  .chart-container.stacked-chart { height: 230px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================== -->
+<!--  Loading State                                                  -->
+<!-- ============================================================== -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading your prayer analytics...</p>
+</div>
+
+<!-- ============================================================== -->
+<!--  Error State                                                    -->
+<!-- ============================================================== -->
+<div id="error-state">
+  <h2>Something went wrong</h2>
+  <p id="error-message" style="color:var(--text-secondary)">Unable to load your data.</p>
+</div>
+
+<!-- ============================================================== -->
+<!--  Dashboard                                                      -->
+<!-- ============================================================== -->
+<div id="dashboard">
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-label">Salah Analytics</div>
+      <h1 id="user-name"></h1>
+      <div class="header-stats">
+        <div class="header-stat">
+          <span class="value" id="total-score">--</span>
+          <span class="label">Total Score</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Key Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card green">
+        <div class="big-number" id="fajr-rate">--</div>
+        <div class="stat-label">Fajr Rate</div>
+      </div>
+      <div class="stat-card accent">
+        <div class="big-number" id="masjid-rate">--</div>
+        <div class="stat-label">Masjid Rate</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="big-number" id="consistency-score">--</div>
+        <div class="stat-label">Consistency</div>
+      </div>
+    </div>
+
+    <!-- Best / Worst Prayer -->
+    <div class="badge-row">
+      <div class="badge best">
+        <div class="badge-label">Strongest Prayer</div>
+        <div class="badge-value" id="best-prayer">--</div>
+      </div>
+      <div class="badge worst">
+        <div class="badge-label">Needs Improvement</div>
+        <div class="badge-value" id="worst-prayer">--</div>
+      </div>
+    </div>
+
+    <!-- Daily Score Trend -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9651;</span> Daily Score Trend (30 Days)</div>
+      <div class="chart-container line-chart">
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Prayer Breakdown -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9632;</span> Prayer Breakdown</div>
+      <div class="chart-container stacked-chart">
+        <canvas id="breakdownChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Weekly Trend -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9650;</span> Weekly Trend (12 Weeks)</div>
+      <div class="chart-container bar-chart">
+        <canvas id="weeklyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Status Distribution -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9673;</span> Status Distribution</div>
+      <div class="chart-container doughnut-chart">
+        <canvas id="statusChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#9733;</span> Insights</div>
+      <div class="insight-list" id="insights-container"></div>
+    </div>
+
+    <div class="footer">
+      Salah Reminder Bot &middot; Prayer Analytics Dashboard
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!--  JavaScript                                                     -->
+<!-- ============================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  const TOKEN = '{{ token }}';
+  const API_URL = '/api/profile/' + TOKEN;
+
+  // Color palette
+  const COLORS = {
+    masjid:       '#66bb6a',
+    iqama:        '#81c784',
+    on_time:      '#fdd835',
+    last_minutes: '#ffa726',
+    qaza:         '#ef5350',
+    missed:       '#546e7a',
+  };
+
+  const STATUS_LABELS = {
+    masjid:       'Masjid',
+    iqama:        'Iqama',
+    on_time:      'On Time',
+    last_minutes: 'Last Minutes',
+    qaza:         'Qaza',
+    missed:       'Missed',
+  };
+
+  const INSIGHT_ICONS = {
+    warning:       '\u26A0',
+    star:          '\u2B50',
+    fire:          '\uD83D\uDD25',
+    mosque:        '\uD83D\uDD4C',
+    chart:         '\uD83D\uDCCA',
+    clock:         '\u23F0',
+    trending_up:   '\u2197\uFE0F',
+    trending_down: '\u2198\uFE0F',
+    refresh:       '\uD83D\uDD04',
+    check:         '\u2714',
+    info:          '\u2139\uFE0F',
+  };
+
+  // Chart.js global defaults
+  Chart.defaults.color = '#90a4ae';
+  Chart.defaults.borderColor = 'rgba(38,53,69,.5)';
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+  Chart.defaults.plugins.legend.labels.padding = 14;
+
+  // ----------------------------------------------------------------
+  //  Fetch data & render
+  // ----------------------------------------------------------------
+  fetch(API_URL)
+    .then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      if (data.error) throw new Error(data.error);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      render(data);
+    })
+    .catch(function (err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error-state').style.display = 'block';
+      document.getElementById('error-message').textContent = err.message;
+    });
+
+  // ----------------------------------------------------------------
+  //  Render all sections
+  // ----------------------------------------------------------------
+  function render(data) {
+    renderHeader(data);
+    renderStatsGrid(data);
+    renderBadges(data);
+    renderDailyChart(data.daily_scores);
+    renderBreakdownChart(data.prayer_breakdown);
+    renderWeeklyChart(data.weekly_trend);
+    renderStatusChart(data.status_distribution);
+    renderInsights(data.insights);
+  }
+
+  // -- Header -------------------------------------------------------
+  function renderHeader(d) {
+    document.getElementById('user-name').textContent = d.user.name;
+    document.getElementById('total-score').textContent = numberFmt(d.user.total_score);
+    document.title = d.user.name + ' - Salah Analytics';
+  }
+
+  // -- Stats Grid ---------------------------------------------------
+  function renderStatsGrid(d) {
+    document.getElementById('fajr-rate').textContent = d.fajr_rate + '%';
+    document.getElementById('masjid-rate').textContent = d.masjid_rate + '%';
+    document.getElementById('consistency-score').textContent = d.consistency_score + '%';
+  }
+
+  // -- Badges -------------------------------------------------------
+  function renderBadges(d) {
+    document.getElementById('best-prayer').textContent = d.best_prayer || '--';
+    document.getElementById('worst-prayer').textContent = d.worst_prayer || '--';
+  }
+
+  // -- Daily Score Line Chart ---------------------------------------
+  function renderDailyChart(daily) {
+    var labels = daily.map(function (d) {
+      var parts = d.date.split('-');
+      return parts[2] + '/' + parts[1];
+    });
+    var points = daily.map(function (d) { return d.points; });
+    var maxLine = daily.map(function (d) { return d.max_possible; });
+
+    new Chart(document.getElementById('dailyChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Your Score',
+            data: points,
+            borderColor: '#4fc3f7',
+            backgroundColor: 'rgba(79,195,247,.10)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            borderWidth: 2.5,
+          },
+          {
+            label: 'Max Possible',
+            data: maxLine,
+            borderColor: 'rgba(144,164,174,.3)',
+            borderDash: [6, 4],
+            pointRadius: 0,
+            borderWidth: 1.5,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+            grid: { display: false },
+          },
+          y: {
+            min: 0,
+            max: 27,
+            ticks: { stepSize: 5 },
+            grid: { color: 'rgba(38,53,69,.5)' },
+          },
+        },
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: {
+            backgroundColor: '#1a2634',
+            titleColor: '#eceff1',
+            bodyColor: '#90a4ae',
+            borderColor: '#263545',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 10,
+          },
+        },
+      },
+    });
+  }
+
+  // -- Prayer Breakdown Stacked Bar ---------------------------------
+  function renderBreakdownChart(breakdown) {
+    var labels = breakdown.map(function (p) { return p.name; });
+
+    var datasets = [
+      { label: 'Masjid',       key: 'masjid_count',  color: COLORS.masjid },
+      { label: 'Iqama',        key: 'iqama_count',   color: COLORS.iqama },
+      { label: 'On Time',      key: 'on_time_count', color: COLORS.on_time },
+      { label: 'Last Minutes', key: 'last_min_count',color: COLORS.last_minutes },
+      { label: 'Qaza',         key: 'qaza_count',    color: COLORS.qaza },
+      { label: 'Missed',       key: 'missed_count',  color: COLORS.missed },
+    ].map(function (ds) {
+      return {
+        label: ds.label,
+        data: breakdown.map(function (p) { return p[ds.key]; }),
+        backgroundColor: ds.color,
+        borderRadius: 3,
+        borderSkipped: false,
+      };
+    });
+
+    new Chart(document.getElementById('breakdownChart'), {
+      type: 'bar',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            stacked: true,
+            grid: { color: 'rgba(38,53,69,.5)' },
+            ticks: { stepSize: 5 },
+          },
+          y: {
+            stacked: true,
+            grid: { display: false },
+          },
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            backgroundColor: '#1a2634',
+            titleColor: '#eceff1',
+            bodyColor: '#90a4ae',
+            borderColor: '#263545',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 10,
+          },
+        },
+      },
+    });
+  }
+
+  // -- Weekly Trend Bar Chart ---------------------------------------
+  function renderWeeklyChart(weekly) {
+    var labels = weekly.map(function (w) {
+      var parts = w.week_start.split('-');
+      return parts[2] + '/' + parts[1];
+    });
+    var points = weekly.map(function (w) { return w.points; });
+    var maxLine = weekly.map(function (w) { return w.max_possible; });
+
+    // Compute color per bar based on ratio to max
+    var bgColors = weekly.map(function (w) {
+      var ratio = w.max_possible > 0 ? w.points / w.max_possible : 0;
+      if (ratio >= 0.75) return '#66bb6a';
+      if (ratio >= 0.50) return '#4fc3f7';
+      if (ratio >= 0.25) return '#ffa726';
+      return '#ef5350';
+    });
+
+    new Chart(document.getElementById('weeklyChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Weekly Score',
+            data: points,
+            backgroundColor: bgColors,
+            borderRadius: 6,
+            borderSkipped: false,
+          },
+          {
+            label: 'Max Possible',
+            data: maxLine,
+            type: 'line',
+            borderColor: 'rgba(144,164,174,.3)',
+            borderDash: [6, 4],
+            pointRadius: 0,
+            borderWidth: 1.5,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { maxRotation: 0 },
+          },
+          y: {
+            min: 0,
+            grid: { color: 'rgba(38,53,69,.5)' },
+          },
+        },
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: {
+            backgroundColor: '#1a2634',
+            titleColor: '#eceff1',
+            bodyColor: '#90a4ae',
+            borderColor: '#263545',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 10,
+            callbacks: {
+              afterBody: function (ctx) {
+                if (ctx[0].datasetIndex === 0) {
+                  var w = weekly[ctx[0].dataIndex];
+                  var pct = w.max_possible > 0
+                    ? ((w.points / w.max_possible) * 100).toFixed(0)
+                    : 0;
+                  return pct + '% of maximum';
+                }
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // -- Status Distribution Doughnut ---------------------------------
+  function renderStatusChart(dist) {
+    var statusKeys = ['masjid', 'iqama', 'on_time', 'last_minutes', 'qaza', 'missed'];
+    var labels = statusKeys.map(function (k) { return STATUS_LABELS[k]; });
+    var values = statusKeys.map(function (k) { return dist[k] || 0; });
+    var colors = statusKeys.map(function (k) { return COLORS[k]; });
+
+    new Chart(document.getElementById('statusChart'), {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderColor: '#1a2634',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 16, usePointStyle: true, pointStyle: 'circle' },
+          },
+          tooltip: {
+            backgroundColor: '#1a2634',
+            titleColor: '#eceff1',
+            bodyColor: '#90a4ae',
+            borderColor: '#263545',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 10,
+            callbacks: {
+              label: function (ctx) {
+                var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                var pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // -- Insights -----------------------------------------------------
+  function renderInsights(insights) {
+    var container = document.getElementById('insights-container');
+    container.innerHTML = '';
+    insights.forEach(function (ins) {
+      var item = document.createElement('div');
+      item.className = 'insight-item ' + (ins.icon || 'info');
+
+      var iconDiv = document.createElement('div');
+      iconDiv.className = 'insight-icon ' + (ins.icon || 'info');
+      iconDiv.textContent = INSIGHT_ICONS[ins.icon] || INSIGHT_ICONS.info;
+
+      var textDiv = document.createElement('div');
+      textDiv.className = 'insight-text';
+      textDiv.textContent = ins.text;
+
+      item.appendChild(iconDiv);
+      item.appendChild(textDiv);
+      container.appendChild(item);
+    });
+  }
+
+  // -- Utility ------------------------------------------------------
+  function numberFmt(n) {
+    if (n == null) return '--';
+    return n.toLocaleString();
+  }
+})();
+</script>
+</body>
+</html>
