@@ -82,15 +82,14 @@ def timezone_keyboard() -> InlineKeyboardMarkup:
 def calc_method_keyboard() -> InlineKeyboardMarkup:
     """Calculation method selection."""
     methods = [
+        ("Uzbekistan (O'zMI)", "uzbekistan"),
         ("Muslim World League", "muslim_world_league"),
         ("Egyptian", "egyptian"),
         ("Karachi", "karachi"),
         ("Umm al-Qura", "umm_al_qura"),
-        ("North America (ISNA)", "north_america"),
-        ("Dubai", "dubai"),
-        ("Qatar", "qatar"),
-        ("Kuwait", "kuwait"),
-        ("Singapore", "singapore"),
+        ("North America (ISNA)", "isna"),
+        ("Tehran", "tehran"),
+        ("Jafari", "jafari"),
     ]
     keyboard = [
         [InlineKeyboardButton(name, callback_data=f"calc_method:{value}")]

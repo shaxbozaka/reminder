@@ -18,7 +18,7 @@ class User(Base, TimestampMixin):
     timezone: Mapped[str] = mapped_column(String(50), default="UTC")
 
     # Preferences
-    calc_method: Mapped[str] = mapped_column(String(50), default="muslim_world_league")
+    calc_method: Mapped[str] = mapped_column(String(50), default="uzbekistan")
     madhab: Mapped[str] = mapped_column(String(20), default="hanafi")
     language: Mapped[str] = mapped_column(String(10), default="en")
 

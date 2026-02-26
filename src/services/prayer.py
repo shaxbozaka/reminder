@@ -124,6 +124,7 @@ def _ha(lat: float, decl: float, angle: float) -> float | None:
 
 # Fajr/Isha sun angles per calculation method
 _METHODS: dict[str, tuple[float, float | None]] = {
+    "uzbekistan": (15.0, 15.0),  # Muslim Board of Uzbekistan (Sajda verified)
     "muslim_world_league": (18.0, 17.0),
     "isna": (15.0, 15.0),
     "egyptian": (19.5, 17.5),
