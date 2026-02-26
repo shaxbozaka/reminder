@@ -424,8 +424,8 @@ canvas { max-width: 100%; }
       <h1 id="user-name"></h1>
       <div class="header-stats">
         <div class="header-stat">
-          <span class="value" id="total-score">--</span>
-          <span class="label">Total Score</span>
+          <span class="value" id="avg-score">--</span>
+          <span class="label">Avg / Day</span>
         </div>
 
       </div>
@@ -591,7 +591,7 @@ canvas { max-width: 100%; }
   // -- Header -------------------------------------------------------
   function renderHeader(d) {
     document.getElementById('user-name').textContent = d.user.name;
-    document.getElementById('total-score').textContent = numberFmt(d.user.total_score);
+    document.getElementById('avg-score').textContent = d.user.avg_score + ' / 25';
     document.title = d.user.name + ' - Salah Analytics';
   }
 

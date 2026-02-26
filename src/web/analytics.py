@@ -47,11 +47,14 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
     consistency_score = _compute_consistency_score(logs)
     insights = _generate_insights(logs, prayer_breakdown, user)
 
+    avg_score = _compute_avg_daily_score(logs)
+
     return {
         "user": {
             "name": user["first_name"] or user["username"] or "User",
             "username": user["username"],
             "total_score": user["total_score"] or 0,
+            "avg_score": avg_score,
             "current_streak": user["current_streak"] or 0,
             "best_streak": user["best_streak"] or 0,
         },
@@ -364,6 +367,20 @@ def _generate_insights(
         })
 
     return insights
+
+
+def _compute_avg_daily_score(logs: list[dict]) -> float:
+    """Average daily score across completed days (excludes today)."""
+    today = date.today()
+    day_scores: dict[date, int] = defaultdict(int)
+    for log in logs:
+        d = _to_date(log["prayer_date"])
+        if d >= today:
+            continue  # skip today — day is not complete yet
+        day_scores[d] += log.get("score", 0) or 0
+    if not day_scores:
+        return 0.0
+    return round(sum(day_scores.values()) / len(day_scores), 1)
 
 
 def _to_date(val: Any) -> date:
