@@ -68,13 +68,7 @@ async def prayer_response_callback(update: Update, context: ContextTypes.DEFAULT
         }
         label = status_labels.get(status, status.value)
 
-        user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(telegram_id)
-        total = user.total_score if user else 0
-        response_text = (
-            f"{prayer_name.value.capitalize()} - {label}\n"
-            f"+{points} points | Total: {total}"
-        )
+        response_text = f"{prayer_name.value.capitalize()} - {label}"
 
         await query.edit_message_text(response_text)
 
