@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import pathlib
 from datetime import date, datetime
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.config import settings
 from src.services.ical import generate_user_token
 from src.web.analytics import get_profile_data
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = pathlib.Path(__file__).parent / "templates"
 _jinja_env = Environment(
@@ -40,17 +43,17 @@ def _verify_telegram_init_data(init_data: str) -> int | None:
 
     See: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
     """
-    parsed = parse_qs(init_data)
+    parsed = parse_qs(init_data, keep_blank_values=True)
     received_hash = parsed.get("hash", [None])[0]
     if not received_hash:
         return None
 
     # Build data-check-string: sorted key=value pairs excluding hash
+    # Values must be URL-decoded (parse_qs handles this)
     pairs = []
-    for part in init_data.split("&"):
-        key, _, val = part.partition("=")
+    for key, values in parsed.items():
         if key != "hash":
-            pairs.append(f"{key}={val}")
+            pairs.append(f"{key}={values[0]}")
     pairs.sort()
     data_check_string = "\n".join(pairs)
 
@@ -59,6 +62,7 @@ def _verify_telegram_init_data(init_data: str) -> int | None:
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
+        logger.warning("Telegram initData HMAC mismatch: computed=%s received=%s", computed_hash[:16], received_hash[:16])
         return None
 
     # Extract user id

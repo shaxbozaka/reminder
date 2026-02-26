@@ -123,15 +123,17 @@ def _ha(lat: float, decl: float, angle: float) -> float | None:
 # ═══════════════════════════════════════════════════════════════════════
 
 # Fajr/Isha sun angles per calculation method
-_METHODS: dict[str, tuple[float, float | None]] = {
-    "uzbekistan": (15.0, 15.0),  # Muslim Board of Uzbekistan (Sajda verified)
-    "muslim_world_league": (18.0, 17.0),
-    "isna": (15.0, 15.0),
-    "egyptian": (19.5, 17.5),
-    "karachi": (18.0, 18.0),
-    "umm_al_qura": (18.5, None),  # isha = maghrib + 90 min
-    "tehran": (17.7, 14.0),
-    "jafari": (16.0, 14.0),
+# (fajr_angle, isha_angle | None, sunset_angle)
+# sunset_angle: standard is -0.8333, some methods use deeper angles
+_METHODS: dict[str, tuple[float, float | None, float]] = {
+    "uzbekistan": (15.0, 15.0, -1.5),  # Muslim Board of Uzbekistan (Sajda verified)
+    "muslim_world_league": (18.0, 17.0, -0.8333),
+    "isna": (15.0, 15.0, -0.8333),
+    "egyptian": (19.5, 17.5, -0.8333),
+    "karachi": (18.0, 18.0, -0.8333),
+    "umm_al_qura": (18.5, None, -0.8333),  # isha = maghrib + 90 min
+    "tehran": (17.7, 14.0, -0.8333),
+    "jafari": (16.0, 14.0, -0.8333),
 }
 
 
@@ -144,6 +146,7 @@ def _compute(
     isha_ang: float | None,
     asr_factor: int,
     elevation: float,
+    sunset_angle: float = -0.8333,
 ) -> dict[str, float]:
     """
     Two-pass prayer time calculation (decimal hours, local time).
@@ -153,7 +156,7 @@ def _compute(
     """
     jd_noon = _jd(date_.year, date_.month, date_.day)
 
-    sun_alt = -0.8333
+    sun_alt = sunset_angle
     if elevation > 0:
         sun_alt -= 0.0347 * math.sqrt(elevation)
 
@@ -265,10 +268,11 @@ def get_prayer_times(
         .total_seconds()
         / 3600.0
     )
-    fajr_ang, isha_ang = _METHODS.get(calc_method, _METHODS["muslim_world_league"])
+    method = _METHODS.get(calc_method, _METHODS["uzbekistan"])
+    fajr_ang, isha_ang, sun_ang = method
     asr_factor = ASR_METHODS.get(madhab, 2)
 
-    raw = _compute(latitude, longitude, date_, utc_off, fajr_ang, isha_ang, asr_factor, 0.0)
+    raw = _compute(latitude, longitude, date_, utc_off, fajr_ang, isha_ang, asr_factor, 0.0, sun_ang)
 
     return [
         PrayerTime(PrayerName.FAJR, _hours_to_dt(raw["fajr"], date_, tz, round_up=False)),
@@ -284,7 +288,7 @@ def get_sunrise_time(
     longitude: float,
     date_: date,
     timezone: str,
-    calc_method: str = "muslim_world_league",
+    calc_method: str = "uzbekistan",
 ) -> datetime | None:
     """Get sunrise time for a given location and date."""
     tz = ZoneInfo(timezone)
@@ -294,9 +298,10 @@ def get_sunrise_time(
         .total_seconds()
         / 3600.0
     )
-    fajr_ang, isha_ang = _METHODS.get(calc_method, _METHODS["muslim_world_league"])
+    method = _METHODS.get(calc_method, _METHODS["uzbekistan"])
+    fajr_ang, isha_ang, sun_ang = method
 
-    raw = _compute(latitude, longitude, date_, utc_off, fajr_ang, isha_ang, 2, 0.0)
+    raw = _compute(latitude, longitude, date_, utc_off, fajr_ang, isha_ang, 2, 0.0, sun_ang)
     return _hours_to_dt(raw["sunrise"], date_, tz, round_up=False)
 
 
