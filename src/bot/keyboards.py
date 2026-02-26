@@ -44,7 +44,6 @@ def settings_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("Madhab", callback_data="settings:madhab"),
         ],
         [
-            InlineKeyboardButton("Timezone", callback_data="settings:timezone"),
             InlineKeyboardButton("Daily Quran", callback_data="settings:quran_toggle"),
         ],
         [
@@ -54,29 +53,6 @@ def settings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def timezone_keyboard() -> InlineKeyboardMarkup:
-    """Timezone selection keyboard."""
-    timezones = [
-        ("Tashkent (UTC+5)", "Asia/Tashkent"),
-        ("Samarkand (UTC+5)", "Asia/Samarkand"),
-        ("Kabul (UTC+4:30)", "Asia/Kabul"),
-        ("Dubai (UTC+4)", "Asia/Dubai"),
-        ("Riyadh (UTC+3)", "Asia/Riyadh"),
-        ("Istanbul (UTC+3)", "Asia/Istanbul"),
-        ("Karachi (UTC+5)", "Asia/Karachi"),
-        ("Dhaka (UTC+6)", "Asia/Dhaka"),
-        ("Kuala Lumpur (UTC+8)", "Asia/Kuala_Lumpur"),
-        ("Jakarta (UTC+7)", "Asia/Jakarta"),
-        ("Cairo (UTC+2)", "Africa/Cairo"),
-        ("London (UTC+0)", "Europe/London"),
-        ("Moscow (UTC+3)", "Europe/Moscow"),
-        ("New York (UTC-5)", "America/New_York"),
-    ]
-    keyboard = [
-        [InlineKeyboardButton(name, callback_data=f"timezone:{value}")]
-        for name, value in timezones
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
 
 def calc_method_keyboard() -> InlineKeyboardMarkup:

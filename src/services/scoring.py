@@ -71,10 +71,10 @@ class ScoringService:
             "percentage": (total_points / max_possible * 100) if max_possible > 0 else 0,
         }
 
-    async def get_weekly_summary(self, telegram_id: int) -> dict:
-        """Get summary for the past 7 days."""
-        today = date.today()
-        week_ago = today - timedelta(days=7)
+    async def get_weekly_summary(self, telegram_id: int, user_today: date | None = None) -> dict:
+        """Get summary for the past 7 days with per-day breakdown."""
+        today = user_today or date.today()
+        week_ago = today - timedelta(days=6)
         logs = await self.prayer_repo.get_date_range_logs(telegram_id, week_ago, today)
 
         total_points = sum(log.score for log in logs)
@@ -84,9 +84,26 @@ class ScoringService:
         for log in logs:
             status_counts[log.status] = status_counts.get(log.status, 0) + 1
 
+        # Per-day breakdown
+        from src.models.prayer_log import PrayerName
+        all_prayers = [PrayerName.FAJR, PrayerName.DHUHR, PrayerName.ASR, PrayerName.MAGHRIB, PrayerName.ISHA]
+        days = []
+        for i in range(7):
+            d = week_ago + timedelta(days=i)
+            day_logs = [l for l in logs if l.prayer_date == d]
+            log_map = {l.prayer_name: l for l in day_logs}
+            day_points = sum(l.score for l in day_logs if l.score)
+            days.append({
+                "date": d,
+                "logs": log_map,
+                "prayers": all_prayers,
+                "points": day_points,
+            })
+
         return {
             "start_date": week_ago,
             "end_date": today,
+            "days": days,
             "total_points": total_points,
             "max_possible": max_possible,
             "percentage": (total_points / max_possible * 100) if max_possible > 0 else 0,
@@ -138,21 +155,46 @@ class ScoringService:
         return f"{day_name}\n\n{code_lines}\n\n{points} points \u2022 {logged}/5 logged"
 
     def format_weekly_summary(self, summary: dict) -> str:
-        """Format weekly summary for display."""
-        start = summary["start_date"].strftime("%b %d")
-        end = summary["end_date"].strftime("%b %d")
+        """Format weekly summary with per-day prayer grid."""
         points = summary["total_points"]
         max_pts = summary["max_possible"]
         pct = summary["percentage"]
 
-        lines = [f"Week: {start} \u2013 {end}", ""]
+        # Status to single-char indicator
+        STATUS_CHAR = {
+            PrayerStatus.MASJID: "\U0001f7e2",
+            PrayerStatus.IQAMA: "\U0001f7e2",
+            PrayerStatus.ON_TIME: "\U0001f7e1",
+            PrayerStatus.LAST_MINUTES: "\U0001f7e0",
+            PrayerStatus.QAZA: "\U0001f534",
+            PrayerStatus.MISSED: "\u26ab",
+            PrayerStatus.PENDING: "\u26aa",
+        }
 
-        for status, count in sorted(summary["status_counts"].items(), key=lambda x: x[0].value):
-            emoji = STATUS_EMOJI.get(status, "")
-            label = STATUS_LABELS.get(status, status.value)
-            lines.append(f"{emoji} {label}: {count}")
+        rows = []
+        # Header
+        rows.append("          F  D  A  M  I  pts")
 
-        lines.append("")
-        lines.append(f"{points}/{max_pts} points ({pct:.0f}%)")
+        for day in summary["days"]:
+            d = day["date"]
+            day_label = d.strftime("%a %d")
+            log_map = day["logs"]
 
-        return "\n".join(lines)
+            icons = []
+            for prayer in day["prayers"]:
+                log = log_map.get(prayer)
+                if log:
+                    icons.append(STATUS_CHAR.get(log.status, "\u26aa"))
+                else:
+                    icons.append("\u00b7")
+
+            pts = day["points"]
+            pts_str = str(pts) if pts > 0 else "\u00b7"
+            row = f"{day_label}  {'  '.join(icons)}  {pts_str}"
+            rows.append(row)
+
+        rows.append("")
+        rows.append(f"{points}/{max_pts} points ({pct:.0f}%)")
+
+        code_lines = "\n".join(f"<code>{r}</code>" for r in rows)
+        return code_lines

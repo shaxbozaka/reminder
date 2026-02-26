@@ -117,33 +117,102 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def week_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show weekly summary."""
+    """Show weekly summary with per-day grid."""
     telegram_id = update.effective_user.id
 
     async with async_session() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(telegram_id)
+
+        if not user:
+            await update.message.reply_text("Please /start first.")
+            return
+
+        tz = ZoneInfo(user.timezone) if user.timezone else ZoneInfo("UTC")
+        user_today = datetime.now(tz).date()
+
         scoring = ScoringService(session)
-        summary = await scoring.get_weekly_summary(telegram_id)
+        summary = await scoring.get_weekly_summary(telegram_id, user_today)
         text = scoring.format_weekly_summary(summary)
 
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, parse_mode="HTML")
 
 
 async def score_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show user's score and streak."""
+    """Show user's score and streak with breakdown."""
     telegram_id = update.effective_user.id
 
     async with async_session() as session:
         repo = UserRepository(session)
         user = await repo.get_by_telegram_id(telegram_id)
 
-    if not user:
-        await update.message.reply_text("Please /start first.")
-        return
+        if not user:
+            await update.message.reply_text("Please /start first.")
+            return
 
-    await update.message.reply_text(
-        f"Your Stats\n\n"
-        f"Total Score: {user.total_score}"
-    )
+        prayer_repo = PrayerRepository(session)
+        scoring = ScoringService(session)
+
+        tz = ZoneInfo(user.timezone) if user.timezone else ZoneInfo("UTC")
+        user_today = datetime.now(tz).date()
+        week_ago = user_today - timedelta(days=6)
+
+        # Get all-time status counts
+        from sqlalchemy import func, select, and_
+        from src.models.prayer_log import PrayerLog
+
+        all_logs_stmt = (
+            select(PrayerLog.status, func.count())
+            .where(
+                and_(
+                    PrayerLog.telegram_id == telegram_id,
+                    PrayerLog.status != PrayerStatus.PENDING,
+                )
+            )
+            .group_by(PrayerLog.status)
+        )
+        result = await session.execute(all_logs_stmt)
+        status_counts = dict(result.all())
+
+        # Get total days tracked
+        days_stmt = (
+            select(func.count(func.distinct(PrayerLog.prayer_date)))
+            .where(PrayerLog.telegram_id == telegram_id)
+        )
+        result = await session.execute(days_stmt)
+        total_days = result.scalar() or 0
+
+        # Get week logs for 7-day score
+        week_logs = await prayer_repo.get_date_range_logs(telegram_id, week_ago, user_today)
+        week_score = sum(log.score for log in week_logs if log.score)
+
+        total_prayers = sum(status_counts.values())
+        masjid = status_counts.get(PrayerStatus.MASJID, 0)
+        iqama = status_counts.get(PrayerStatus.IQAMA, 0)
+        on_time = status_counts.get(PrayerStatus.ON_TIME, 0)
+        last_min = status_counts.get(PrayerStatus.LAST_MINUTES, 0)
+        qaza = status_counts.get(PrayerStatus.QAZA, 0)
+        missed = status_counts.get(PrayerStatus.MISSED, 0)
+
+        streak = user.current_streak
+        best = user.best_streak
+
+        rows = [
+            f"Score: {user.total_score}   Week: {week_score}",
+            f"Streak: {streak} days   Best: {best} days",
+            "",
+            f"\U0001f7e2 Masjid     {masjid}",
+            f"\U0001f7e2 Iqama      {iqama}",
+            f"\U0001f7e1 On Time    {on_time}",
+            f"\U0001f7e0 Last Min   {last_min}",
+            f"\U0001f534 Qaza       {qaza}",
+            f"\u26ab Missed     {missed}",
+            "",
+            f"{total_prayers} prayers \u2022 {total_days} days",
+        ]
+
+        code_lines = "\n".join(f"<code>{r}</code>" for r in rows)
+        await update.message.reply_text(code_lines, parse_mode="HTML")
 
 
 
@@ -151,7 +220,8 @@ def _calc_time_windows(prayer_time: datetime, prayer_name: PrayerName, user) -> 
     """Calculate time windows for each prayer status.
 
     For Fajr, the window ends at sunrise (praying after sunrise = Qaza).
-    For other prayers, uses the gap to next prayer capped at 90 min.
+    For other prayers, uses the actual gap to the next prayer time.
+    Qaza is not shown as a window — it means the prayer time has expired.
     """
     tz = ZoneInfo(user.timezone)
     today = prayer_time.astimezone(tz).date()
@@ -187,13 +257,21 @@ def _calc_time_windows(prayer_time: datetime, prayer_name: PrayerName, user) -> 
             end_time = prayer_time + timedelta(hours=2)
 
         gap_min = int((end_time - prayer_time).total_seconds() / 60)
-        total_min = min(max(gap_min, 30), 90)
+        total_min = max(gap_min, 30)
 
-    # Iqama = first window (Masjid shares same time, jama'ah vs solo)
-    iqama_end = prayer_time + timedelta(minutes=int(total_min * 0.50))
-    ontime_end = prayer_time + timedelta(minutes=int(total_min * 0.70))
-    lastmin_end = prayer_time + timedelta(minutes=int(total_min * 0.85))
-    qaza_end = prayer_time + timedelta(minutes=total_min)
+    # Fixed durations: Iqama ~20 min, Last Min ~30 min, On Time fills the middle.
+    # For short windows (< 60 min), split into thirds.
+    if total_min < 60:
+        third = total_min // 3
+        iqama_dur = third
+        lastmin_dur = third
+    else:
+        iqama_dur = 20
+        lastmin_dur = 30
+
+    iqama_end = prayer_time + timedelta(minutes=iqama_dur)
+    deadline = prayer_time + timedelta(minutes=total_min)
+    ontime_end = deadline - timedelta(minutes=lastmin_dur)
 
     def fmt(dt):
         return dt.astimezone(tz).strftime("%H:%M")
@@ -201,8 +279,7 @@ def _calc_time_windows(prayer_time: datetime, prayer_name: PrayerName, user) -> 
     lines = [
         f"\U0001f7e2 Iqama      {fmt(prayer_time)}\u2013{fmt(iqama_end)}",
         f"\U0001f7e1 On Time    {fmt(iqama_end)}\u2013{fmt(ontime_end)}",
-        f"\U0001f7e0 Last Min   {fmt(ontime_end)}\u2013{fmt(lastmin_end)}",
-        f"\U0001f534 Qaza       {fmt(lastmin_end)}\u2013{fmt(qaza_end)}",
+        f"\U0001f7e0 Last Min   {fmt(ontime_end)}\u2013{fmt(deadline)}",
     ]
 
     return "\n".join(lines)

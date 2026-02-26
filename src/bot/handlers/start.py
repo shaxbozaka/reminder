@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.bot.keyboards import calc_method_keyboard, madhab_keyboard, notify_timing_keyboard, settings_keyboard, timezone_keyboard
+from src.bot.keyboards import calc_method_keyboard, madhab_keyboard, notify_timing_keyboard, settings_keyboard
 from src.database import async_session
 from src.repositories.user_repo import UserRepository
 from src.services.prayer import get_prayer_times, get_sunrise_time, format_prayer_times
@@ -135,11 +135,6 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Select your Madhab (affects Asr time):",
             reply_markup=madhab_keyboard(),
         )
-    elif action == "timezone":
-        await query.edit_message_text(
-            "Select your timezone:",
-            reply_markup=timezone_keyboard(),
-        )
     elif action == "notify_timing":
         await query.edit_message_text(
             "When should I notify you about prayers?",
@@ -213,36 +208,6 @@ async def madhab_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             from src.bot.scheduler import schedule_user_prayers
             await schedule_user_prayers(context.application, user)
-
-
-async def timezone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle timezone selection."""
-    query = update.callback_query
-    await query.answer()
-
-    tz_str = query.data.split(":", 1)[1]
-    telegram_id = update.effective_user.id
-
-    async with async_session() as session:
-        repo = UserRepository(session)
-        user = await repo.get_by_telegram_id(telegram_id)
-        if user:
-            user.timezone = tz_str
-            await session.commit()
-
-            if user.latitude and user.longitude:
-                times_text = _format_times_code(user, tz_override=tz_str)
-
-                await query.edit_message_text(
-                    f"Timezone: {tz_str}\n\n"
-                    f"{times_text}",
-                    parse_mode="HTML",
-                )
-
-                from src.bot.scheduler import schedule_user_prayers
-                await schedule_user_prayers(context.application, user)
-            else:
-                await query.edit_message_text(f"Timezone updated to: {tz_str}")
 
 
 async def notify_timing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -354,7 +319,6 @@ def get_start_handlers():
         CallbackQueryHandler(settings_callback, pattern=r"^settings:"),
         CallbackQueryHandler(calc_method_callback, pattern=r"^calc_method:"),
         CallbackQueryHandler(madhab_callback, pattern=r"^madhab:"),
-        CallbackQueryHandler(timezone_callback, pattern=r"^timezone:"),
         CallbackQueryHandler(notify_timing_callback, pattern=r"^notify_timing:"),
         CommandHandler("calendar", calendar_command),
     ]
