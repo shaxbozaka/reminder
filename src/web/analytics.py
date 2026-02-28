@@ -369,18 +369,36 @@ def _generate_insights(
     return insights
 
 
-def _compute_avg_daily_score(logs: list[dict]) -> float:
-    """Average daily score across completed days (excludes today)."""
+def _compute_avg_daily_score(logs: list[dict]) -> dict:
+    """Average daily score for last 7 days with comparison to previous 7 days."""
     today = date.today()
-    day_scores: dict[date, int] = defaultdict(int)
+    week_start = today - timedelta(days=6)
+    prev_week_start = week_start - timedelta(days=7)
+
+    current_scores: dict[date, int] = defaultdict(int)
+    prev_scores: dict[date, int] = defaultdict(int)
+
     for log in logs:
         d = _to_date(log["prayer_date"])
-        if d >= today:
-            continue  # skip today — day is not complete yet
-        day_scores[d] += log.get("score", 0) or 0
-    if not day_scores:
-        return 0.0
-    return round(sum(day_scores.values()) / len(day_scores), 1)
+        score = log.get("score", 0) or 0
+        if week_start <= d <= today:
+            current_scores[d] += score
+        elif prev_week_start <= d < week_start:
+            prev_scores[d] += score
+
+    current_avg = round(sum(current_scores.values()) / len(current_scores), 1) if current_scores else 0.0
+    prev_avg = round(sum(prev_scores.values()) / len(prev_scores), 1) if prev_scores else 0.0
+
+    if prev_avg > 0:
+        change_pct = round((current_avg - prev_avg) / prev_avg * 100)
+    else:
+        change_pct = 0
+
+    return {
+        "current": current_avg,
+        "previous": prev_avg,
+        "change_pct": change_pct,
+    }
 
 
 def _to_date(val: Any) -> date:

@@ -426,7 +426,8 @@ canvas { max-width: 100%; }
       <div class="header-stats">
         <div class="header-stat">
           <span class="value" id="avg-score">--</span>
-          <span class="label">Avg / Day</span>
+          <span class="label">Avg / Day (7d)</span>
+          <span class="label" id="avg-change" style="font-size:0.75rem"></span>
         </div>
 
       </div>
@@ -600,7 +601,19 @@ canvas { max-width: 100%; }
   // -- Header -------------------------------------------------------
   function renderHeader(d) {
     document.getElementById('user-name').textContent = d.user.name;
-    document.getElementById('avg-score').textContent = d.user.avg_score + ' / 25';
+    const avg = d.user.avg_score;
+    document.getElementById('avg-score').textContent = avg.current + ' / 25';
+    const changeEl = document.getElementById('avg-change');
+    if (avg.change_pct > 0) {
+      changeEl.textContent = '\u25B2 ' + avg.change_pct + '% vs prev week';
+      changeEl.style.color = 'var(--green)';
+    } else if (avg.change_pct < 0) {
+      changeEl.textContent = '\u25BC ' + Math.abs(avg.change_pct) + '% vs prev week';
+      changeEl.style.color = 'var(--red)';
+    } else {
+      changeEl.textContent = 'same as prev week';
+      changeEl.style.color = 'var(--text-muted)';
+    }
     document.title = d.user.name + ' - Salah Analytics';
   }
 
