@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,7 +132,7 @@ class PrayerRepository:
         for row_date, _ in rows:
             if row_date == expected_date:
                 streak += 1
-                expected_date = expected_date.replace(day=expected_date.day - 1)
+                expected_date = expected_date - timedelta(days=1)
             else:
                 break
 
