@@ -18,7 +18,7 @@ jobs:
           script: |
             cd /root/reminder
             git pull origin main
-            docker image prune -af
             docker compose build
-            docker compose up -d
+            docker compose up -d --force-recreate bot
+            docker image prune -f
             docker compose logs --tail=5 bot
