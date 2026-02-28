@@ -44,44 +44,47 @@ async def prayer_response_callback(update: Update, context: ContextTypes.DEFAULT
 
     telegram_id = update.effective_user.id
 
-    async with async_session() as session:
-        prayer_repo = PrayerRepository(session)
-        scoring = ScoringService(session)
+    try:
+        async with async_session() as session:
+            prayer_repo = PrayerRepository(session)
+            scoring = ScoringService(session)
 
-        log = await prayer_repo.get_pending_log(telegram_id, prayer_name, prayer_date)
+            log = await prayer_repo.get_pending_log(telegram_id, prayer_name, prayer_date)
 
-        if not log:
-            await query.edit_message_text(
-                f"{query.message.text}\n\n(Already responded)"
-            )
-            return
-
-        points = await scoring.record_prayer(telegram_id, log, status)
-
-        # Build response message
-        status_labels = {
-            PrayerStatus.MASJID: "Masjid",
-            PrayerStatus.IQAMA: "Iqama",
-            PrayerStatus.ON_TIME: "On Time",
-            PrayerStatus.LAST_MINUTES: "Last Minutes",
-            PrayerStatus.QAZA: "Qaza",
-        }
-        label = status_labels.get(status, status.value)
-
-        response_text = f"{prayer_name.value.capitalize()} - {label}"
-
-        await query.edit_message_text(response_text)
-
-        # If qaza, send motivational message
-        if status == PrayerStatus.QAZA:
-            motivation = get_motivation_message(is_qaza=True)
-            if motivation:
-                await context.bot.send_message(
-                    chat_id=telegram_id,
-                    text=motivation,
+            if not log:
+                await query.edit_message_text(
+                    f"{query.message.text}\n\n(Already responded)"
                 )
-                await prayer_repo.mark_motivation_sent(log)
-                await session.commit()
+                return
+
+            points = await scoring.record_prayer(telegram_id, log, status)
+
+            # Build response message
+            status_labels = {
+                PrayerStatus.MASJID: "Masjid",
+                PrayerStatus.IQAMA: "Iqama",
+                PrayerStatus.ON_TIME: "On Time",
+                PrayerStatus.LAST_MINUTES: "Last Minutes",
+                PrayerStatus.QAZA: "Qaza",
+            }
+            label = status_labels.get(status, status.value)
+
+            response_text = f"{prayer_name.value.capitalize()} - {label}"
+
+            await query.edit_message_text(response_text)
+
+            # If qaza, send motivational message
+            if status == PrayerStatus.QAZA:
+                motivation = get_motivation_message(is_qaza=True)
+                if motivation:
+                    await context.bot.send_message(
+                        chat_id=telegram_id,
+                        text=motivation,
+                    )
+                    await prayer_repo.mark_motivation_sent(log)
+                    await session.commit()
+    except Exception as e:
+        logger.error(f"Prayer callback error: {e}", exc_info=True)
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
