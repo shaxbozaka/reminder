@@ -30,6 +30,7 @@ You have FULL ACCESS to the user's prayer data and can CREATE REMINDERS and UPDA
 - If they want to see their reminders, use list_reminders
 - If they want to cancel a reminder, use delete_reminder
 - If they want to log or correct a prayer status, use update_prayer (e.g. "mark Maghrib on 25th as iqama") — this works even if the prayer wasn't logged before
+- Optional prayers (tahajjud, duha, witr, tarawih) can also be logged — just use "on_time" as the status. These are tracked separately, not scored.
 - NEVER tell the user to "do it in the app" or "do it manually" — YOU are the app. Use your tools to do everything.
 - If you see many qaza or missed prayers, gently encourage them with Hadith/Quran
 - If they have a strong streak, praise them
@@ -160,8 +161,8 @@ TOOLS = [
             "properties": {
                 "prayer_name": {
                     "type": "string",
-                    "enum": ["fajr", "dhuhr", "asr", "maghrib", "isha"],
-                    "description": "The prayer name"
+                    "enum": ["fajr", "dhuhr", "asr", "maghrib", "isha", "tahajjud", "duha", "witr", "tarawih"],
+                    "description": "The prayer name (fard or optional)"
                 },
                 "prayer_date": {
                     "type": "string",
@@ -467,6 +468,9 @@ async def execute_tool(
         except (ValueError, KeyError) as e:
             return json.dumps({"error": f"Invalid input: {e}"})
 
+        from src.models.prayer_log import OPTIONAL_PRAYERS
+        is_optional = prayer_name in OPTIONAL_PRAYERS
+
         prayer_repo = PrayerRepository(session)
         log = await prayer_repo.get_log_by_date_prayer(telegram_id, prayer_name, prayer_date)
 
@@ -474,10 +478,11 @@ async def execute_tool(
             old_status = log.status.value
             old_score = log.score
             await prayer_repo.update_status(log, status)
+            if is_optional:
+                log.score = 0
+                await session.flush()
             score_diff = log.score - old_score
         else:
-            # Create new log if it doesn't exist
-            from src.models.prayer_log import SCORE_MAP
             user = await user_repo.get_by_telegram_id(telegram_id)
             if not user:
                 return json.dumps({"error": "User not found"})
@@ -490,11 +495,14 @@ async def execute_tool(
                 prayer_time=prayer_time,
             )
             await prayer_repo.update_status(log, status)
+            if is_optional:
+                log.score = 0
+                await session.flush()
             old_status = "none"
             score_diff = log.score
 
-        # Update user total score
-        if score_diff != 0:
+        # Update user total score (only for fard prayers)
+        if score_diff != 0 and not is_optional:
             user = await user_repo.get_by_telegram_id(telegram_id)
             if user:
                 user.total_score = (user.total_score or 0) + score_diff

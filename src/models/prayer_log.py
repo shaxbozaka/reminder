@@ -13,6 +13,15 @@ class PrayerName(str, enum.Enum):
     ASR = "asr"
     MAGHRIB = "maghrib"
     ISHA = "isha"
+    # Optional prayers (not scored, tracked separately)
+    TAHAJJUD = "tahajjud"
+    DUHA = "duha"
+    WITR = "witr"
+    TARAWIH = "tarawih"
+
+
+FARD_PRAYERS = {PrayerName.FAJR, PrayerName.DHUHR, PrayerName.ASR, PrayerName.MAGHRIB, PrayerName.ISHA}
+OPTIONAL_PRAYERS = {PrayerName.TAHAJJUD, PrayerName.DUHA, PrayerName.WITR, PrayerName.TARAWIH}
 
 
 class PrayerStatus(str, enum.Enum):

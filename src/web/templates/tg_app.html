@@ -278,6 +278,35 @@ body {
   font-size: .7rem;
 }
 
+.optional-badge {
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .6rem 1rem;
+  text-align: center;
+  flex: 1;
+  min-width: 80px;
+}
+
+.optional-badge .ob-name {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: .2rem;
+}
+
+.optional-badge .ob-count {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.optional-badge .ob-last {
+  font-size: .6rem;
+  color: var(--text-muted);
+  margin-top: .15rem;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Stats Grid                                                         */
 /* ------------------------------------------------------------------ */
@@ -517,6 +546,12 @@ canvas { max-width: 100%; }
     <!-- Weekly Grid -->
     <div class="weekly-grid" id="weekly-grid"></div>
 
+    <!-- Optional Prayers -->
+    <div class="card" id="optional-prayers-card" style="display:none">
+      <div class="card-title"><span class="icon">&#9784;</span> Optional Prayers (30d)</div>
+      <div id="optional-prayers-content" style="display:flex;gap:.75rem;flex-wrap:wrap"></div>
+    </div>
+
     <!-- Key Stats Grid -->
     <div class="stats-grid">
       <div class="stat-card green">
@@ -671,6 +706,7 @@ canvas { max-width: 100%; }
   function render(data) {
     renderHeader(data);
     renderWeeklyGrid(data);
+    renderOptionalPrayers(data);
     renderStatsGrid(data);
     renderBadges(data);
     renderDailyChart(data.daily_scores);
@@ -727,6 +763,23 @@ canvas { max-width: 100%; }
     }
     html += '</tbody></table>';
     document.getElementById('weekly-grid').innerHTML = html;
+  }
+
+  function renderOptionalPrayers(d) {
+    const op = d.optional_prayers;
+    if (!op || !op.prayers || op.prayers.length === 0) return;
+
+    document.getElementById('optional-prayers-card').style.display = '';
+    const container = document.getElementById('optional-prayers-content');
+    let html = '';
+    for (const p of op.prayers) {
+      html += '<div class="optional-badge">';
+      html += '<div class="ob-name">' + p.name + '</div>';
+      html += '<div class="ob-count">' + p.count + 'x</div>';
+      if (p.last) html += '<div class="ob-last">last: ' + p.last + '</div>';
+      html += '</div>';
+    }
+    container.innerHTML = html;
   }
 
   function renderStatsGrid(d) {

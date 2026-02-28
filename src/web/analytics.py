@@ -35,7 +35,8 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
     if user is None:
         return {}
 
-    logs = await _get_all_logs(session, telegram_id)
+    all_logs = await _get_all_logs(session, telegram_id)
+    logs = [l for l in all_logs if l["prayer_name"] not in OPTIONAL_PRAYER_NAMES]
 
     daily_scores = _compute_daily_scores(logs)
     prayer_breakdown = _compute_prayer_breakdown(logs)
@@ -49,6 +50,7 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
 
     avg_score = _compute_avg_daily_score(logs)
     weekly_grid = _compute_weekly_grid(logs)
+    optional_prayers = _compute_optional_prayers(all_logs)
 
     return {
         "user": {
@@ -69,6 +71,7 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
         "masjid_rate": masjid_rate,
         "consistency_score": consistency_score,
         "weekly_grid": weekly_grid,
+        "optional_prayers": optional_prayers,
         "insights": insights,
     }
 
@@ -401,6 +404,44 @@ def _compute_avg_daily_score(logs: list[dict]) -> dict:
         "current": current_avg,
         "previous": prev_avg,
         "change_pct": change_pct,
+    }
+
+
+OPTIONAL_PRAYER_NAMES = {"tahajjud", "duha", "witr", "tarawih"}
+
+
+def _compute_optional_prayers(logs: list[dict]) -> dict:
+    """Compute optional prayer stats for the last 30 days."""
+    today = date.today()
+    start = today - timedelta(days=29)
+
+    optional_logs = [
+        l for l in logs
+        if l["prayer_name"] in OPTIONAL_PRAYER_NAMES and start <= _to_date(l["prayer_date"]) <= today
+    ]
+
+    # Count per prayer
+    counts: dict[str, int] = defaultdict(int)
+    recent: dict[str, date] = {}
+    for log in optional_logs:
+        name = log["prayer_name"]
+        counts[name] += 1
+        d = _to_date(log["prayer_date"])
+        if name not in recent or d > recent[name]:
+            recent[name] = d
+
+    prayers = []
+    for name in ["tahajjud", "duha", "witr", "tarawih"]:
+        if counts[name] > 0:
+            prayers.append({
+                "name": name.capitalize(),
+                "count": counts[name],
+                "last": recent[name].isoformat() if name in recent else None,
+            })
+
+    return {
+        "total": len(optional_logs),
+        "prayers": prayers,
     }
 
 
