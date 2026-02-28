@@ -198,6 +198,87 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Weekly Grid                                                        */
+/* ------------------------------------------------------------------ */
+.weekly-grid {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+  animation: fadeInUp .4s ease-out both;
+  animation-delay: .05s;
+  overflow-x: auto;
+}
+
+.weekly-grid table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .8rem;
+}
+
+.weekly-grid th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: .35rem .25rem;
+  text-align: center;
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.weekly-grid th:first-child {
+  text-align: left;
+}
+
+.weekly-grid td {
+  padding: .3rem .25rem;
+  text-align: center;
+  font-size: .95rem;
+}
+
+.weekly-grid td:first-child {
+  text-align: left;
+  font-size: .75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.weekly-grid td:last-child {
+  font-weight: 700;
+  font-size: .8rem;
+  color: var(--text-primary);
+}
+
+.weekly-grid tr.today td:first-child {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.wg-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.wg-dot.masjid   { background: var(--green); }
+.wg-dot.on_time  { background: var(--yellow); }
+.wg-dot.last_min { background: var(--orange); }
+.wg-dot.qaza     { background: var(--red); }
+.wg-dot.missed   { background: #37474f; }
+.wg-dot.pending  { background: #b0bec5; }
+.wg-dot.none     { background: transparent; }
+
+.wg-dash {
+  color: var(--text-muted);
+  font-size: .7rem;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Stats Grid                                                         */
 /* ------------------------------------------------------------------ */
 .stats-grid {
@@ -433,6 +514,9 @@ canvas { max-width: 100%; }
       </div>
     </div>
 
+    <!-- Weekly Grid -->
+    <div class="weekly-grid" id="weekly-grid"></div>
+
     <!-- Key Stats Grid -->
     <div class="stats-grid">
       <div class="stat-card green">
@@ -586,6 +670,7 @@ canvas { max-width: 100%; }
   // ----------------------------------------------------------------
   function render(data) {
     renderHeader(data);
+    renderWeeklyGrid(data);
     renderStatsGrid(data);
     renderBadges(data);
     renderDailyChart(data.daily_scores);
@@ -618,6 +703,32 @@ canvas { max-width: 100%; }
   }
 
   // -- Stats Grid ---------------------------------------------------
+  function renderWeeklyGrid(d) {
+    const grid = d.weekly_grid;
+    if (!grid || !grid.length) return;
+
+    const dotHtml = (status) => {
+      if (status === 'none') return '<span class="wg-dash">\u2796</span>';
+      return '<span class="wg-dot ' + status + '"></span>';
+    };
+
+    let html = '<table><thead><tr><th></th><th>F</th><th>D</th><th>A</th><th>M</th><th>I</th><th>Pts</th></tr></thead><tbody>';
+    for (const row of grid) {
+      const cls = row.is_today ? ' class="today"' : '';
+      html += '<tr' + cls + '>';
+      html += '<td>' + row.label + '</td>';
+      html += '<td>' + dotHtml(row.prayers.fajr) + '</td>';
+      html += '<td>' + dotHtml(row.prayers.dhuhr) + '</td>';
+      html += '<td>' + dotHtml(row.prayers.asr) + '</td>';
+      html += '<td>' + dotHtml(row.prayers.maghrib) + '</td>';
+      html += '<td>' + dotHtml(row.prayers.isha) + '</td>';
+      html += '<td>' + (row.points > 0 ? row.points : '\u00b7') + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('weekly-grid').innerHTML = html;
+  }
+
   function renderStatsGrid(d) {
     document.getElementById('fajr-rate').textContent = d.fajr_rate + '%';
     document.getElementById('masjid-rate').textContent = d.masjid_rate + '%';

@@ -48,6 +48,7 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
     insights = _generate_insights(logs, prayer_breakdown, user)
 
     avg_score = _compute_avg_daily_score(logs)
+    weekly_grid = _compute_weekly_grid(logs)
 
     return {
         "user": {
@@ -67,6 +68,7 @@ async def get_profile_data(session: AsyncSession, telegram_id: int) -> dict[str,
         "fajr_rate": fajr_rate,
         "masjid_rate": masjid_rate,
         "consistency_score": consistency_score,
+        "weekly_grid": weekly_grid,
         "insights": insights,
     }
 
@@ -400,6 +402,50 @@ def _compute_avg_daily_score(logs: list[dict]) -> dict:
         "previous": prev_avg,
         "change_pct": change_pct,
     }
+
+
+def _compute_weekly_grid(logs: list[dict]) -> list[dict]:
+    """Last 7 days grid with per-prayer status for the week view."""
+    today = date.today()
+    start = today - timedelta(days=6)
+
+    # Build lookup: (date, prayer_name) -> status
+    lookup: dict[tuple[date, str], str] = {}
+    for log in logs:
+        d = _to_date(log["prayer_date"])
+        if start <= d <= today:
+            lookup[(d, log["prayer_name"])] = log["status"]
+
+    STATUS_TO_EMOJI = {
+        "masjid": "masjid",
+        "iqama": "masjid",
+        "on_time": "on_time",
+        "last_minutes": "last_min",
+        "qaza": "qaza",
+        "missed": "missed",
+        "pending": "pending",
+    }
+
+    rows = []
+    for i in range(7):
+        d = start + timedelta(days=i)
+        day_label = d.strftime("%a %d")
+        prayers = {}
+        pts = 0
+        for prayer in PRAYER_ORDER:
+            status = lookup.get((d, prayer))
+            if status:
+                prayers[prayer] = STATUS_TO_EMOJI.get(status, "none")
+                pts += STATUS_SCORES.get(status, 0)
+            else:
+                prayers[prayer] = "none"
+        rows.append({
+            "label": day_label,
+            "prayers": prayers,
+            "points": pts,
+            "is_today": d == today,
+        })
+    return rows
 
 
 def _to_date(val: Any) -> date:
