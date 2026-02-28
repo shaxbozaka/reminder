@@ -54,6 +54,20 @@ class PrayerRepository:
         await self.session.flush()
         return log
 
+    async def get_log_by_date_prayer(
+        self, telegram_id: int, prayer_name: PrayerName, prayer_date: date
+    ) -> PrayerLog | None:
+        """Get a prayer log by date and prayer name (any status)."""
+        stmt = select(PrayerLog).where(
+            and_(
+                PrayerLog.telegram_id == telegram_id,
+                PrayerLog.prayer_name == prayer_name,
+                PrayerLog.prayer_date == prayer_date,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_today_logs(self, telegram_id: int, today: date) -> list[PrayerLog]:
         stmt = (
             select(PrayerLog)

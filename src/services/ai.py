@@ -151,6 +151,30 @@ TOOLS = [
         }
     },
     {
+        "name": "update_prayer",
+        "description": "Update a prayer log status for a specific date and prayer. Use when the user wants to correct or set how they prayed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prayer_name": {
+                    "type": "string",
+                    "enum": ["fajr", "dhuhr", "asr", "maghrib", "isha"],
+                    "description": "The prayer name"
+                },
+                "prayer_date": {
+                    "type": "string",
+                    "description": "The date in YYYY-MM-DD format"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["masjid", "iqama", "on_time", "last_minutes", "qaza", "missed"],
+                    "description": "The prayer status to set"
+                },
+            },
+            "required": ["prayer_name", "prayer_date", "status"]
+        }
+    },
+    {
         "name": "delete_reminder",
         "description": "Delete/cancel a reminder by its ID.",
         "input_schema": {
@@ -431,6 +455,41 @@ async def execute_tool(
             "title": task.title,
             "cron": cron_expr,
             "timezone": tz_str,
+        })
+
+    elif tool_name == "update_prayer":
+        try:
+            prayer_name = PrayerName(tool_input["prayer_name"])
+            prayer_date = date.fromisoformat(tool_input["prayer_date"])
+            status = PrayerStatus(tool_input["status"])
+        except (ValueError, KeyError) as e:
+            return json.dumps({"error": f"Invalid input: {e}"})
+
+        prayer_repo = PrayerRepository(session)
+        log = await prayer_repo.get_log_by_date_prayer(telegram_id, prayer_name, prayer_date)
+        if not log:
+            return json.dumps({"error": f"No prayer log found for {prayer_name.value} on {prayer_date}"})
+
+        old_status = log.status.value
+        old_score = log.score
+        await prayer_repo.update_status(log, status)
+
+        # Update user total score
+        score_diff = log.score - old_score
+        if score_diff != 0:
+            user = await user_repo.get_by_telegram_id(telegram_id)
+            if user:
+                user.total_score = (user.total_score or 0) + score_diff
+
+        await session.commit()
+
+        return json.dumps({
+            "success": True,
+            "prayer": prayer_name.value,
+            "date": str(prayer_date),
+            "old_status": old_status,
+            "new_status": status.value,
+            "score_change": score_diff,
         })
 
     elif tool_name == "list_reminders":
