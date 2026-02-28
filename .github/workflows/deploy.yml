@@ -20,6 +20,7 @@ jobs:
             git pull origin main
             docker compose build
             docker compose up -d --force-recreate bot
+            docker compose exec -T bot alembic stamp 53eba8db08bf 2>/dev/null || true
             docker compose exec -T bot alembic upgrade head
             docker image prune -f
             docker compose logs --tail=5 bot
