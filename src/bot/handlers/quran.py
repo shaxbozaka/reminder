@@ -30,6 +30,9 @@ async def send_daily_quran(bot, telegram_id: int):
         text = "Daily Quran\n\n" + format_quran_excerpt(excerpt)
         await bot.send_message(chat_id=telegram_id, text=text)
 
+        from src.bot.handlers.chat import add_bot_message
+        add_bot_message(telegram_id, text)
+
 
 def get_quran_handlers():
     """Return quran-related handlers."""

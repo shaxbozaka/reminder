@@ -95,6 +95,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_message = update.message.text
     if not user_message or user_message.startswith("/"):
         return
+
+    # If replying to a bot message, include the quoted content for context
+    reply = update.message.reply_to_message
+    if reply and reply.from_user and reply.from_user.id == context.bot.id and reply.text:
+        user_message = f"[Replying to: {reply.text}]\n\n{user_message}"
+
     await _process_message(update, context, user_message)
 
 
@@ -138,6 +144,15 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             "Couldn't process the voice message. Try typing instead."
         )
+
+
+def add_bot_message(telegram_id: int, message: str):
+    """Add a bot-initiated message to chat history so AI has context."""
+    history = _chat_histories.get(telegram_id, [])
+    history.append({"role": "assistant", "content": message})
+    if len(history) > MAX_HISTORY * 2:
+        history = history[-(MAX_HISTORY * 2):]
+    _chat_histories[telegram_id] = history
 
 
 async def clear_chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
