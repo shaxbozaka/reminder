@@ -36,8 +36,9 @@ async def post_init(application):
     await load_all_tasks()
     logger.info("Scheduled tasks loaded")
 
-    # Set menu button to open Mini App
+    # Set menu button to open Mini App (clear commands so button opens app, not command list)
     from telegram import MenuButtonWebApp, WebAppInfo
+    await application.bot.delete_my_commands()
     await application.bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
             text="Open",
