@@ -1,0 +1,18 @@
+name: Fetch Logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch bot logs
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker compose -f /root/reminder/docker-compose.yml logs --tail=100 bot 2>&1
