@@ -36,6 +36,15 @@ async def post_init(application):
     await load_all_tasks()
     logger.info("Scheduled tasks loaded")
 
+    # Set menu button to open Mini App
+    from telegram import MenuButtonWebApp, WebAppInfo
+    await application.bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="Open",
+            web_app=WebAppInfo(url="https://salah.shaxbozaka.cc/tg-app"),
+        )
+    )
+
     # Pre-load whisper model so first voice message is fast
     from src.services.voice import preload_model
     await preload_model()
