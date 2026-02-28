@@ -186,7 +186,7 @@ class ScoringService:
                 if log:
                     icons.append(STATUS_CHAR.get(log.status, "\u26aa"))
                 else:
-                    icons.append("\u00b7")
+                    icons.append("\u2796")
 
             pts = day["points"]
             pts_str = str(pts) if pts > 0 else "\u00b7"
