@@ -372,7 +372,8 @@ def _generate_insights(
 def _compute_avg_daily_score(logs: list[dict]) -> dict:
     """Average daily score for last 7 days with comparison to previous 7 days."""
     today = date.today()
-    week_start = today - timedelta(days=6)
+    yesterday = today - timedelta(days=1)
+    week_start = yesterday - timedelta(days=6)
     prev_week_start = week_start - timedelta(days=7)
 
     current_scores: dict[date, int] = defaultdict(int)
@@ -381,7 +382,7 @@ def _compute_avg_daily_score(logs: list[dict]) -> dict:
     for log in logs:
         d = _to_date(log["prayer_date"])
         score = log.get("score", 0) or 0
-        if week_start <= d <= today:
+        if week_start <= d <= yesterday:
             current_scores[d] += score
         elif prev_week_start <= d < week_start:
             prev_scores[d] += score
