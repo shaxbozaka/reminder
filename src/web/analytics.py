@@ -387,8 +387,8 @@ def _compute_avg_daily_score(logs: list[dict]) -> dict:
         elif prev_week_start <= d < week_start:
             prev_scores[d] += score
 
-    current_avg = round(sum(current_scores.values()) / len(current_scores), 1) if current_scores else 0.0
-    prev_avg = round(sum(prev_scores.values()) / len(prev_scores), 1) if prev_scores else 0.0
+    current_avg = round(sum(current_scores.values()) / len(current_scores) / 5, 1) if current_scores else 0.0
+    prev_avg = round(sum(prev_scores.values()) / len(prev_scores) / 5, 1) if prev_scores else 0.0
 
     if prev_avg > 0:
         change_pct = round((current_avg - prev_avg) / prev_avg * 100)

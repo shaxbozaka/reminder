@@ -602,7 +602,7 @@ canvas { max-width: 100%; }
   function renderHeader(d) {
     document.getElementById('user-name').textContent = d.user.name;
     const avg = d.user.avg_score;
-    document.getElementById('avg-score').textContent = avg.current + ' / 25';
+    document.getElementById('avg-score').textContent = avg.current + ' / 5';
     const changeEl = document.getElementById('avg-change');
     if (avg.change_pct > 0) {
       changeEl.textContent = '\u25B2 ' + avg.change_pct + '% vs prev week';
