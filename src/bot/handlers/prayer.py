@@ -57,6 +57,14 @@ async def prayer_response_callback(update: Update, context: ContextTypes.DEFAULT
                 )
                 return
 
+            # Determine which other message to dismiss
+            current_msg_id = query.message.message_id
+            other_msg_id = None
+            if log.notification_message_id and log.notification_message_id != current_msg_id:
+                other_msg_id = log.notification_message_id
+            elif log.followup_message_id and log.followup_message_id != current_msg_id:
+                other_msg_id = log.followup_message_id
+
             points = await scoring.record_prayer(telegram_id, log, status)
 
             # Build response message
@@ -72,6 +80,17 @@ async def prayer_response_callback(update: Update, context: ContextTypes.DEFAULT
             response_text = f"{prayer_name.value.capitalize()} - {label}"
 
             await query.edit_message_text(response_text)
+
+            # Remove buttons from the other notification message
+            if other_msg_id:
+                try:
+                    await context.bot.edit_message_reply_markup(
+                        chat_id=telegram_id,
+                        message_id=other_msg_id,
+                        reply_markup=None,
+                    )
+                except Exception:
+                    pass  # Message may have been deleted or already edited
 
             # If qaza, send motivational message
             if status == PrayerStatus.QAZA:

@@ -366,17 +366,20 @@ async def _send_prayer_followup(context):
             return  # Already responded, no need for follow-up
 
         # Send follow-up nudge
-        from src.services.motivation import get_motivation_message
         from src.bot.keyboards import prayer_response_keyboard
 
         date_str = p_date.strftime("%Y-%m-%d")
         keyboard = prayer_response_keyboard(prayer_name, date_str)
 
-        await context.bot.send_message(
+        msg = await context.bot.send_message(
             chat_id=telegram_id,
             text=f"Hey, you haven\'t logged {prayer_name.value.capitalize()} yet. How did it go?",
             reply_markup=keyboard,
         )
+
+        # Store follow-up message ID so it can be dismissed on response
+        log.followup_message_id = msg.message_id
+        await session.commit()
 
 
 async def _daily_reschedule(context):

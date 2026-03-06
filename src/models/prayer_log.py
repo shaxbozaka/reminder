@@ -64,6 +64,7 @@ class PrayerLog(Base, TimestampMixin):
 
     # Track which notification message this belongs to
     notification_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    followup_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Motivation sent flag (for qaza follow-up)
     motivation_sent: Mapped[bool] = mapped_column(default=False)
