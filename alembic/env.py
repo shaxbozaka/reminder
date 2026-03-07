@@ -8,6 +8,7 @@ from src.models.user import User  # noqa: F401
 from src.models.prayer_log import PrayerLog  # noqa: F401
 from src.models.daily_verse import DailyVerse  # noqa: F401
 from src.models.scheduled_task import ScheduledTask  # noqa: F401
+from src.models.note import Note  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

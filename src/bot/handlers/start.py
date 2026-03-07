@@ -241,17 +241,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "Commands\n\n"
         "/start - Set up your account\n"
-        "/times - Today's prayer times\n"
-        "/today - Today's prayer summary\n"
+        "/today - Today's prayer times & summary\n"
         "/week - Weekly report\n"
         "/score - Your score & streak\n"
+        "/n - Quick capture a note\n"
+        "/done - Mark notes complete\n"
         "/quran - Get a Quran excerpt\n"
         "/connect_apple - Connect iCloud\n"
         "/settings - Preferences\n"
         "/clear - Clear AI chat history\n"
         "/help - Show this help\n\n"
-        "Just type anything or send a voice message — "
-        "I can answer questions, create reminders, and more."
+        "Quick capture:\n"
+        "  /n buy groceries — saves instantly\n"
+        "  Forward any message — captured\n"
+        "  Voice message — transcribed & saved\n\n"
+        "Just type anything — I can answer questions, "
+        "create reminders, and more."
     )
     await update.message.reply_text(help_text)
 

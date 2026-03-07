@@ -21,8 +21,8 @@ src/
 ├── main.py              # Entry point (webhook + polling)
 ├── config.py            # Pydantic settings (SALAH_ prefix env vars)
 ├── database.py          # Async SQLAlchemy engine (asyncpg, pool_size=20)
-├── models/              # SQLAlchemy models (User, PrayerLog, DailyVerse, ScheduledTask)
-├── repositories/        # Data access layer (UserRepo, PrayerRepo, TaskRepo)
+├── models/              # SQLAlchemy models (User, PrayerLog, DailyVerse, ScheduledTask, Note)
+├── repositories/        # Data access layer (UserRepo, PrayerRepo, TaskRepo, NoteRepo)
 ├── services/            # Business logic
 │   ├── ai.py            # Claude AI chat + tool execution
 │   ├── prayer.py        # Prayer times + sunrise calculation
@@ -33,9 +33,9 @@ src/
 │   ├── voice.py         # Whisper transcription
 │   └── ical.py          # iCal feed generation
 └── bot/
-    ├── handlers/        # Telegram handlers (start, prayer, quran, chat, apple)
+    ├── handlers/        # Telegram handlers (start, prayer, quran, chat, apple, notes)
     ├── keyboards.py     # Inline keyboards
-    ├── scheduler.py     # Prayer notifications, follow-ups, daily times, quran, iCloud sync
+    ├── scheduler.py     # Prayer notifications, follow-ups, daily times, quran, iCloud sync, productivity check-ins
     └── task_scheduler.py # User reminder scheduler
 ```
 
@@ -45,7 +45,7 @@ src/
 - All DB operations use `async with async_session() as session:`
 - **Handler registration order matters**: chat handlers MUST be registered LAST (catch-all for non-command text)
 - **Webhook must include** `allowed_updates=["message", "callback_query"]` or buttons won't work
-- AI service tools: `create_reminder`, `create_recurring_reminder`, `list_reminders`, `delete_reminder`
+- AI service tools: `create_reminder`, `create_recurring_reminder`, `list_reminders`, `delete_reminder`, `capture_note`, `list_notes`, `complete_note`
 
 ## Key Behaviors
 
@@ -61,11 +61,21 @@ src/
 - **AI responses**: split into multiple messages on paragraph breaks for natural feel
 - **Scoring**: Masjid +5, Iqama +4, On Time +3, Last Min +2, Qaza +1
 
+## Productivity System (5 Layers)
+
+1. **Capture** -- `/n anything` saves instantly, voice messages transcribed & saved, forwarded messages captured
+2. **Salah-anchored rhythm** -- Fajr (+10min): "What must happen today?", Asr (+5min): "Still on track?", Isha (+10min): "What carries to tomorrow?"
+3. **Weekly brain** -- Sunday 7am: digest of all captures grouped by category, user responds with priorities → bot sets reminders
+4. **Energy-aware reminders** -- AI schedules deep work for mornings, admin/calls after Asr
+5. **Closure** -- `/done` marks complete, Friday 8pm: clean slate report (captured/done/ignored)
+
 ## Commands
 
 - `/today` -- prayer times + daily summary (single command for both)
 - `/week` -- weekly report
 - `/score` -- total score & streak
+- `/n` -- quick capture a note (`/n buy groceries`)
+- `/done` -- mark notes complete (shows open notes with buttons)
 - `/quran` -- get a Quran excerpt now
 - `/connect_apple` -- connect iCloud Calendar & Reminders
 - `/settings` -- preferences (calc method, madhab, timezone, notification timing, daily quran toggle)

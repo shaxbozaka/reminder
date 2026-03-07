@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.models.prayer_log import PrayerName, PrayerStatus
+from src.models.note import NoteSource, NoteStatus
 from src.models.scheduled_task import TaskType
+from src.repositories.note_repo import NoteRepository
 from src.repositories.prayer_repo import PrayerRepository
 from src.repositories.task_repo import TaskRepository
 from src.repositories.user_repo import UserRepository
@@ -68,6 +70,23 @@ ITEM TARGETING (when user has Apple Calendar connected):
 - Use target="calendar_event" for time-blocked activities (e.g. "meeting at 3pm for 1 hour")
 - Default to "reminder" if unclear
 - Items automatically sync to the user's iPhone
+
+PRODUCTIVITY SYSTEM — 5 layers:
+1. CAPTURE: Notes are captured via /n, voice, or forwarded messages. You can see them in USER DATA.
+   - Use capture_note to save things the user mentions in conversation that sound like tasks/ideas
+   - Use list_notes to show open notes
+   - Use complete_note to mark notes done
+2. SALAH-ANCHORED RHYTHM: The bot sends check-ins at prayer times:
+   - Fajr → "What's the one thing that must happen today?"
+   - Asr → "Still on track?" (user responds yes/no, if no → what shifted?)
+   - Isha → "What carries to tomorrow?" + today closes
+   When user responds to these check-ins, capture their answers as notes with appropriate context.
+3. WEEKLY BRAIN: Sunday Fajr → weekly digest of all captures, grouped by theme.
+   User responds with priorities → you set reminders automatically.
+4. ENERGY-AWARE REMINDERS: Schedule deep work tasks for morning slots, admin/messages/calls after Asr.
+   Learn from the user's patterns over time.
+5. CLOSURE: /done marks things complete. Every Friday → clean slate report showing what was captured,
+   what was done, what was ignored.
 """
 
 TOOLS = [
@@ -191,6 +210,46 @@ TOOLS = [
             "required": ["task_id"]
         }
     },
+    {
+        "name": "capture_note",
+        "description": "Capture a quick note for the user. Use when they mention something that sounds like a task, idea, or thing to remember.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "The note content"
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category (e.g. 'work', 'personal', 'dev', 'health', 'admin')"
+                },
+            },
+            "required": ["content"]
+        }
+    },
+    {
+        "name": "list_notes",
+        "description": "List all open (uncompleted) notes for the user.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        }
+    },
+    {
+        "name": "complete_note",
+        "description": "Mark a note as done by its ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "note_id": {
+                    "type": "integer",
+                    "description": "The ID of the note to mark as done"
+                }
+            },
+            "required": ["note_id"]
+        }
+    },
 ]
 
 
@@ -312,6 +371,19 @@ async def build_user_context(session: AsyncSession, telegram_id: int) -> str:
                 elif strong_pct > 70:
                     note = " (excellent!)"
                 parts.append(f"  {pname.value.capitalize()}: {stats['strong']} strong, {stats['weak']} weak out of {stats['total']}{note}")
+
+    # --- Open notes ---
+    note_repo = NoteRepository(session)
+    open_notes = await note_repo.get_open_notes(telegram_id)
+    if open_notes:
+        parts.append(f"\nOPEN NOTES ({len(open_notes)}):")
+        for n in open_notes[:15]:
+            cat = f" [{n.category}]" if n.category else ""
+            age = (datetime.now(tz) - n.created_at.replace(tzinfo=tz if n.created_at.tzinfo is None else n.created_at.tzinfo)).days
+            age_str = f"{age}d ago" if age > 0 else "today"
+            parts.append(f"  #{n.id}: {n.content[:80]}{cat} ({age_str})")
+    else:
+        parts.append("\nOPEN NOTES: None")
 
     # --- Active reminders ---
     task_repo = TaskRepository(session)
@@ -560,6 +632,44 @@ async def execute_tool(
         await session.commit()
 
         return json.dumps({"success": True, "deleted": title})
+
+    elif tool_name == "capture_note":
+        note_repo = NoteRepository(session)
+        note = await note_repo.create(
+            telegram_id=telegram_id,
+            content=tool_input["content"],
+            source=NoteSource.TEXT,
+            category=tool_input.get("category"),
+        )
+        await session.commit()
+        return json.dumps({
+            "success": True,
+            "note_id": note.id,
+            "content": note.content,
+        })
+
+    elif tool_name == "list_notes":
+        note_repo = NoteRepository(session)
+        notes = await note_repo.get_open_notes(telegram_id)
+        if not notes:
+            return json.dumps({"notes": [], "message": "No open notes"})
+        items = []
+        for n in notes:
+            items.append({
+                "id": n.id,
+                "content": n.content,
+                "category": n.category,
+                "created": n.created_at.strftime("%Y-%m-%d %H:%M") if n.created_at else None,
+            })
+        return json.dumps({"notes": items})
+
+    elif tool_name == "complete_note":
+        note_repo = NoteRepository(session)
+        note = await note_repo.mark_done_by_id(telegram_id, tool_input["note_id"])
+        await session.commit()
+        if note:
+            return json.dumps({"success": True, "completed": note.content})
+        return json.dumps({"error": "Note not found or already completed"})
 
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
