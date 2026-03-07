@@ -158,6 +158,12 @@ async def schedule_user_prayers(app: Application, user):
         )
         logger.info(f"Scheduled daily Quran for user {user.telegram_id} at {quran_time.strftime('%H:%M')}")
 
+    # Schedule salah-anchored productivity check-ins
+    _schedule_checkins(job_queue, user, today_times, now)
+
+    # Schedule weekly digest (Sunday) and Friday clean slate
+    _schedule_weekly_jobs(job_queue, user, tz, now, today)
+
     # Schedule iCloud sync if Apple connected
     if user.apple_id and user.apple_app_password:
         sync_jobs = job_queue.get_jobs_by_name(f"icloud_sync_{user.telegram_id}")
@@ -473,3 +479,287 @@ async def _send_daily_quran(context):
             chat_id=telegram_id,
         )
         logger.info(f"Next Quran for {telegram_id} at {quran_time.strftime('%H:%M')}")
+
+
+def _schedule_checkins(job_queue, user, today_times, now):
+    """Schedule Fajr/Asr/Isha productivity check-ins."""
+    # Remove existing check-in jobs
+    for job in job_queue.get_jobs_by_name(f"checkin_{user.telegram_id}"):
+        job.schedule_removal()
+
+    if not today_times:
+        return
+
+    # Find Fajr, Asr, Isha times
+    prayer_map = {pt.name: pt.time for pt in today_times}
+
+    # Fajr check-in: 10 min after Fajr adhan
+    fajr = prayer_map.get(PrayerName.FAJR)
+    if fajr:
+        checkin_at = fajr + timedelta(minutes=10)
+        if checkin_at > now:
+            job_queue.run_once(
+                _fajr_checkin,
+                when=checkin_at,
+                data={"telegram_id": user.telegram_id},
+                name=f"checkin_{user.telegram_id}",
+                chat_id=user.telegram_id,
+            )
+
+    # Asr check-in: 5 min after Asr adhan
+    asr = prayer_map.get(PrayerName.ASR)
+    if asr:
+        checkin_at = asr + timedelta(minutes=5)
+        if checkin_at > now:
+            job_queue.run_once(
+                _asr_checkin,
+                when=checkin_at,
+                data={"telegram_id": user.telegram_id},
+                name=f"checkin_{user.telegram_id}",
+                chat_id=user.telegram_id,
+            )
+
+    # Isha check-in: 10 min after Isha adhan
+    isha = prayer_map.get(PrayerName.ISHA)
+    if isha:
+        checkin_at = isha + timedelta(minutes=10)
+        if checkin_at > now:
+            job_queue.run_once(
+                _isha_checkin,
+                when=checkin_at,
+                data={"telegram_id": user.telegram_id},
+                name=f"checkin_{user.telegram_id}",
+                chat_id=user.telegram_id,
+            )
+
+
+def _schedule_weekly_jobs(job_queue, user, tz, now, today):
+    """Schedule Sunday weekly digest and Friday clean slate report."""
+    # Remove existing weekly jobs
+    for name in [f"weekly_digest_{user.telegram_id}", f"friday_report_{user.telegram_id}"]:
+        for job in job_queue.get_jobs_by_name(name):
+            job.schedule_removal()
+
+    # Find next Sunday
+    days_until_sunday = (6 - today.weekday()) % 7
+    if days_until_sunday == 0 and now.hour >= 7:
+        days_until_sunday = 7
+    next_sunday = today + timedelta(days=days_until_sunday)
+    # Sunday digest at 7:00 AM (around Fajr time)
+    sunday_time = datetime.combine(next_sunday, datetime.min.time(), tzinfo=tz).replace(hour=7, minute=0)
+    if sunday_time > now:
+        job_queue.run_once(
+            _weekly_digest,
+            when=sunday_time,
+            data={"telegram_id": user.telegram_id},
+            name=f"weekly_digest_{user.telegram_id}",
+            chat_id=user.telegram_id,
+        )
+        logger.info(f"Scheduled weekly digest for {user.telegram_id} on {next_sunday}")
+
+    # Find next Friday
+    days_until_friday = (4 - today.weekday()) % 7
+    if days_until_friday == 0 and now.hour >= 20:
+        days_until_friday = 7
+    next_friday = today + timedelta(days=days_until_friday)
+    # Friday clean slate at 8:00 PM (after Isha usually)
+    friday_time = datetime.combine(next_friday, datetime.min.time(), tzinfo=tz).replace(hour=20, minute=0)
+    if friday_time > now:
+        job_queue.run_once(
+            _friday_report,
+            when=friday_time,
+            data={"telegram_id": user.telegram_id},
+            name=f"friday_report_{user.telegram_id}",
+            chat_id=user.telegram_id,
+        )
+        logger.info(f"Scheduled Friday report for {user.telegram_id} on {next_friday}")
+
+
+async def _fajr_checkin(context):
+    """Fajr check-in: What's the one thing that must happen today?"""
+    telegram_id = context.job.data["telegram_id"]
+    from src.bot.handlers.chat import add_bot_message
+
+    msg = "What's the one thing that must happen today?"
+    await context.bot.send_message(chat_id=telegram_id, text=msg)
+    add_bot_message(telegram_id, msg)
+
+
+async def _asr_checkin(context):
+    """Asr check-in: Still on track?"""
+    telegram_id = context.job.data["telegram_id"]
+    from src.bot.handlers.chat import add_bot_message
+
+    async with async_session() as session:
+        from src.repositories.note_repo import NoteRepository
+        note_repo = NoteRepository(session)
+        today_notes = await note_repo.get_notes_since(
+            telegram_id,
+            datetime.now() - timedelta(hours=12)
+        )
+
+    open_count = sum(1 for n in today_notes if n.status.value == "open")
+
+    if open_count > 0:
+        msg = f"Still on track? You have {open_count} open note{'s' if open_count != 1 else ''} today."
+    else:
+        msg = "Still on track?"
+    await context.bot.send_message(chat_id=telegram_id, text=msg)
+    add_bot_message(telegram_id, msg)
+
+
+async def _isha_checkin(context):
+    """Isha check-in: What carries to tomorrow?"""
+    telegram_id = context.job.data["telegram_id"]
+    from src.bot.handlers.chat import add_bot_message
+
+    async with async_session() as session:
+        from src.repositories.note_repo import NoteRepository
+        note_repo = NoteRepository(session)
+        open_notes = await note_repo.get_open_notes(telegram_id)
+
+    if open_notes:
+        items = "\n".join(f"  • {n.content[:60]}" for n in open_notes[:5])
+        remaining = len(open_notes) - 5 if len(open_notes) > 5 else 0
+        msg = f"What carries to tomorrow?\n\nStill open:\n{items}"
+        if remaining > 0:
+            msg += f"\n  ...and {remaining} more"
+    else:
+        msg = "Day's closing. Everything handled?"
+
+    await context.bot.send_message(chat_id=telegram_id, text=msg)
+    add_bot_message(telegram_id, msg)
+
+
+async def _weekly_digest(context):
+    """Sunday weekly digest: all captures grouped by category."""
+    telegram_id = context.job.data["telegram_id"]
+    from src.bot.handlers.chat import add_bot_message
+
+    async with async_session() as session:
+        from src.repositories.note_repo import NoteRepository
+        note_repo = NoteRepository(session)
+        week_notes = await note_repo.get_week_notes(telegram_id)
+        stats = await note_repo.get_stats(
+            telegram_id,
+            since=datetime.now() - timedelta(days=7)
+        )
+
+    if not week_notes:
+        msg = "Weekly digest: quiet week. No notes captured."
+        await context.bot.send_message(chat_id=telegram_id, text=msg)
+        add_bot_message(telegram_id, msg)
+        return
+
+    # Group by category
+    by_cat: dict[str, list] = {}
+    for n in week_notes:
+        cat = n.category or "uncategorized"
+        by_cat.setdefault(cat, []).append(n)
+
+    lines = ["Weekly digest:\n"]
+    for cat, notes in sorted(by_cat.items()):
+        lines.append(f"[{cat}]")
+        for n in notes:
+            status_icon = {"open": "⬜", "done": "✅", "ignored": "➖"}.get(n.status.value, "⬜")
+            lines.append(f"  {status_icon} {n.content[:70]}")
+        lines.append("")
+
+    lines.append(
+        f"Stats: {stats['total']} captured, "
+        f"{stats['done']} done, {stats['open']} open, "
+        f"{stats['ignored']} ignored"
+    )
+    lines.append("\nWhat are your priorities for this week? I'll set reminders.")
+
+    msg = "\n".join(lines)
+    await context.bot.send_message(chat_id=telegram_id, text=msg)
+    add_bot_message(telegram_id, msg)
+
+    # Reschedule for next Sunday
+    async with async_session() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(telegram_id)
+    if user:
+        tz = ZoneInfo(user.timezone)
+        next_sunday = datetime.now(tz).date() + timedelta(days=7)
+        sunday_time = datetime.combine(next_sunday, datetime.min.time(), tzinfo=tz).replace(hour=7)
+        context.job_queue.run_once(
+            _weekly_digest,
+            when=sunday_time,
+            data={"telegram_id": telegram_id},
+            name=f"weekly_digest_{telegram_id}",
+            chat_id=telegram_id,
+        )
+
+
+async def _friday_report(context):
+    """Friday clean slate report: what was captured, done, and ignored."""
+    telegram_id = context.job.data["telegram_id"]
+    from src.bot.handlers.chat import add_bot_message
+
+    async with async_session() as session:
+        from src.repositories.note_repo import NoteRepository
+        note_repo = NoteRepository(session)
+        week_notes = await note_repo.get_week_notes(telegram_id)
+        stats = await note_repo.get_stats(
+            telegram_id,
+            since=datetime.now() - timedelta(days=7)
+        )
+
+    if not week_notes:
+        msg = "Jumu'ah Mubarak! Clean week — no notes to report."
+        await context.bot.send_message(chat_id=telegram_id, text=msg)
+        add_bot_message(telegram_id, msg)
+        return
+
+    done = [n for n in week_notes if n.status.value == "done"]
+    still_open = [n for n in week_notes if n.status.value == "open"]
+    ignored = [n for n in week_notes if n.status.value == "ignored"]
+
+    lines = ["Jumu'ah Clean Slate\n"]
+
+    if done:
+        lines.append(f"Done ({len(done)}):")
+        for n in done[:10]:
+            lines.append(f"  ✅ {n.content[:60]}")
+        lines.append("")
+
+    if still_open:
+        lines.append(f"Still open ({len(still_open)}):")
+        for n in still_open[:10]:
+            lines.append(f"  ⬜ {n.content[:60]}")
+        lines.append("")
+
+    if ignored:
+        lines.append(f"Ignored ({len(ignored)}):")
+        for n in ignored[:10]:
+            lines.append(f"  ➖ {n.content[:60]}")
+        lines.append("")
+
+    # Completion rate
+    if stats["total"] > 0:
+        rate = stats["done"] / stats["total"] * 100
+        lines.append(f"Completion: {rate:.0f}% ({stats['done']}/{stats['total']})")
+
+    lines.append("\nAnything to carry forward or let go?")
+
+    msg = "\n".join(lines)
+    await context.bot.send_message(chat_id=telegram_id, text=msg)
+    add_bot_message(telegram_id, msg)
+
+    # Reschedule for next Friday
+    async with async_session() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(telegram_id)
+    if user:
+        tz = ZoneInfo(user.timezone)
+        next_friday = datetime.now(tz).date() + timedelta(days=7)
+        friday_time = datetime.combine(next_friday, datetime.min.time(), tzinfo=tz).replace(hour=20)
+        context.job_queue.run_once(
+            _friday_report,
+            when=friday_time,
+            data={"telegram_id": telegram_id},
+            name=f"friday_report_{telegram_id}",
+            chat_id=telegram_id,
+        )

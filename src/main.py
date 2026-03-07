@@ -6,6 +6,7 @@ import threading
 from telegram.ext import ApplicationBuilder
 
 from src.bot.handlers.chat import get_chat_handlers
+from src.bot.handlers.notes import get_note_handlers
 from src.bot.handlers.prayer import get_prayer_handlers
 from src.bot.handlers.quran import get_quran_handlers
 from src.bot.handlers.start import get_start_handlers
@@ -77,6 +78,10 @@ def build_application():
         application.add_handler(handler)
 
     for handler in get_apple_handlers():
+        application.add_handler(handler)
+
+    # Note handlers before chat (forwarded message filter must come first)
+    for handler in get_note_handlers():
         application.add_handler(handler)
 
     # Chat handler last - catches all non-command text
